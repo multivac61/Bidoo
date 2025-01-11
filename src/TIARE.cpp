@@ -71,7 +71,7 @@ struct Oscillator {
 		this->pulseWidth = simd::clamp(pulseWidth, pwMin, 1.f - pwMin);
 	}
 
-	void process(float deltaTime, T syncValue, float phaseDistX, float phaseDistY) {
+	void process(float deltaTime, T syncValue, T phaseDistX, T phaseDistY) {
 		// Advance phase
 		T deltaPhase = simd::clamp(freq * deltaTime, 1e-6f, 0.35f);
 
@@ -89,10 +89,10 @@ struct Oscillator {
 		phase -= simd::floor(phase);
 
 		for (int i=0; i<channels; i++) {
-			if (phase[i] <= phaseDistX)
-					phaseDist[i] = phase[i] * phaseDistY / phaseDistX;
+			if (phase[i] <= phaseDistX[i])
+					phaseDist[i] = phase[i] * phaseDistY[i] / phaseDistX[i];
 				else
-					phaseDist[i] = phaseDistY + (phase[i]-phaseDistX) * (1.0f - phaseDistY) / (1.0f - phaseDistX);
+					phaseDist[i] = phaseDistY[i] + (phase[i]-phaseDistX[i]) * (1.0f - phaseDistY[i]) / (1.0f - phaseDistX[i]);
 		}
 
 		// Wrap phase
@@ -100,47 +100,6 @@ struct Oscillator {
 
 
 		if (lfoFactor == 1) {
-
-		// 	T wrapPhase = (syncDirection == -1.f) & 1.f;
-		// 	T wrapCrossing = (wrapPhase - (phase - deltaPhase)) / deltaPhase;
-		// 	int wrapMask = simd::movemask((0 < wrapCrossing) & (wrapCrossing <= 1.f));
-		// 	if (wrapMask) {
-		// 		for (int i = 0; i < channels; i++) {
-		// 			if (wrapMask & (1 << i)) {
-		// 				T mask = simd::movemaskInverse<T>(1 << i);
-		// 				float p = wrapCrossing[i] - 1.0f;
-		// 				T x = mask & (2.f * syncDirection);
-		// 				sqrMinBlep.insertDiscontinuity(p, x);
-		// 			}
-		// 		}
-		// 	}
-		//
-		// 	T pulseCrossing = (0.5f - (phaseDist - deltaPhase)) / deltaPhase;
-		// 	int pulseMask = simd::movemask((0 < pulseCrossing) & (pulseCrossing <= 1.f));
-		// 	if (pulseMask) {
-		// 		for (int i = 0; i < channels; i++) {
-		// 			if (pulseMask & (1 << i)) {
-		// 				T mask = simd::movemaskInverse<T>(1 << i);
-		// 				float p = pulseCrossing[i] - 0.5f;
-		// 				T x = mask & (-2.f * syncDirection);
-		// 				sqrMinBlep.insertDiscontinuity(p, x);
-		// 			}
-		// 		}
-		// 	}
-		//
-		// 	T halfCrossing = (0.5f - (phaseDist - deltaPhase)) / deltaPhase;
-		// 	int halfMask = simd::movemask((0 < halfCrossing) & (halfCrossing <= 1.f));
-		// 	if (halfMask) {
-		// 		for (int i = 0; i < channels; i++) {
-		// 			if (halfMask & (1 << i)) {
-		// 				T mask = simd::movemaskInverse<T>(1 << i);
-		// 				float p = halfCrossing[i] - 0.5f;
-		// 				T x = mask & (-2.f * syncDirection);
-		// 				sawMinBlep.insertDiscontinuity(p, x);
-		// 			}
-		// 		}
-		// 	}
-		//
 			if (syncEnabled) {
 				T deltaSync = syncValue - lastSyncValue;
 				T syncCrossing = -lastSyncValue / deltaSync;
@@ -370,7 +329,8 @@ struct TIARE : BidooModule {
 	};
 
 	float phaseDist = 0.0f;
-	float phaseDistX = 0.5f, phaseDistY = 0.5f;
+  /*float_4 phaseDistX[4], phaseDistY[4];*/
+
 	int freqFactor = 1;
 	Oscillator<16, 16, float_4> oscillators[4];
 
@@ -395,22 +355,22 @@ struct TIARE : BidooModule {
 
 	json_t *dataToJson() override {
 		json_t *rootJ = BidooModule::dataToJson();
-		json_object_set_new(rootJ, "phaseDistX", json_real(phaseDistX));
-		json_object_set_new(rootJ, "phaseDistY", json_real(phaseDistY));
+		/*json_object_set_new(rootJ, "phaseDistX", json_real(phaseDistX));*/
+		/*json_object_set_new(rootJ, "phaseDistY", json_real(phaseDistY));*/
 		json_object_set_new(rootJ, "freqFactor", json_integer(freqFactor));
 		return rootJ;
 	}
 
 	void dataFromJson(json_t *rootJ) override {
 		BidooModule::dataFromJson(rootJ);
-		json_t *phaseDistXJ = json_object_get(rootJ, "phaseDistX");
-		if (phaseDistXJ) {
-			phaseDistX = json_number_value(phaseDistXJ);
-		}
-		json_t *phaseDistYJ = json_object_get(rootJ, "phaseDistY");
-		if (phaseDistYJ) {
-			phaseDistY = json_number_value(phaseDistYJ);
-		}
+		/*json_t *phaseDistXJ = json_object_get(rootJ, "phaseDistX");*/
+		/*if (phaseDistXJ) {*/
+		/*	phaseDistX = json_number_value(phaseDistXJ);*/
+		/*}*/
+		/*json_t *phaseDistYJ = json_object_get(rootJ, "phaseDistY");*/
+		/*if (phaseDistYJ) {*/
+		/*	phaseDistY = json_number_value(phaseDistYJ);*/
+		/*}*/
 		json_t *freqFactorJ = json_object_get(rootJ, "freqFactor");
 		if (freqFactorJ) {
 			freqFactor = json_integer_value(freqFactorJ);
@@ -418,37 +378,31 @@ struct TIARE : BidooModule {
 	}
 
 	void onRandomize() override {
-		if (!inputs[TIARE::DIST_X_INPUT].isConnected()) {
-			phaseDistX = random::uniform();
-		}
-		if (!inputs[TIARE::DIST_Y_INPUT].isConnected()) {
-			phaseDistY = random::uniform();
-		}
+		/*if (!inputs[TIARE::DIST_X_INPUT].isConnected()) {*/
+		/*	phaseDistX = random::uniform();*/
+		/*}*/
+		/*if (!inputs[TIARE::DIST_Y_INPUT].isConnected()) {*/
+		/*	phaseDistY = random::uniform();*/
+		/*}*/
 	}
 
 	void onReset() override {
-		if (!inputs[TIARE::DIST_X_INPUT].isConnected()) {
-			phaseDistX = 0.5f;
-		}
-		if (!inputs[TIARE::DIST_Y_INPUT].isConnected()) {
-			phaseDistY = 0.5f;
-		}
+		/*if (!inputs[TIARE::DIST_X_INPUT].isConnected()) {*/
+		/*	phaseDistX = 0.5f;*/
+		/*}*/
+		/*if (!inputs[TIARE::DIST_Y_INPUT].isConnected()) {*/
+		/*	phaseDistY = 0.5f;*/
+		/*}*/
 	}
 
 	void process(const ProcessArgs &args) override {
-		if (inputs[DIST_X_INPUT].isConnected())
-			phaseDistX = rescale(clamp(inputs[DIST_X_INPUT].getVoltage(), 0.0f, 10.0f), 0.0f, 10.0f, 0.01f, 0.98f);
+		const float freqParam = params[FREQ_PARAM].getValue() / 12.f + dsp::quadraticBipolar(params[FINE_PARAM].getValue()) * 3.f / 12.f;
+		const float fmParam = dsp::quadraticBipolar(params[FM_PARAM].getValue());
 
-		if (inputs[DIST_Y_INPUT].isConnected())
-			phaseDistY = rescale(clamp(inputs[DIST_Y_INPUT].getVoltage(), 0.0f, 10.0f), 0.0f, 10.0f, 0.01f, 0.98f);
-
-		float freqParam = params[FREQ_PARAM].getValue() / 12.f;
-		freqParam += dsp::quadraticBipolar(params[FINE_PARAM].getValue()) * 3.f / 12.f;
-		float fmParam = dsp::quadraticBipolar(params[FM_PARAM].getValue());
-
-		int channels = std::max(inputs[PITCH_INPUT].getChannels(), 1);
+		const int channels = std::max(inputs[PITCH_INPUT].getChannels(), 1);
 
 		for (int c = 0; c < channels; c += 4) {
+
 			auto* oscillator = &oscillators[c / 4];
 			oscillator->channels = std::min(channels - c, 4);
 			oscillator->analog = params[MODE_PARAM].getValue() > 0.f;
@@ -462,8 +416,12 @@ struct TIARE : BidooModule {
 			oscillator->setPitch(pitch, freqFactor);
 			oscillator->setPulseWidth(params[PW_PARAM].getValue() + params[PWM_PARAM].getValue() * inputs[PW_INPUT].getPolyVoltageSimd<float_4>(c) / 10.f);
 
+      const auto phaseDistX = simd::rescale(simd::clamp(inputs[DIST_X_INPUT].getPolyVoltageSimd<float_4>(c), 0.0f, 10.0f), 0.0f, 10.0f, 0.01f, 0.98f);
+      const auto phaseDistY = simd::rescale(simd::clamp(inputs[DIST_Y_INPUT].getPolyVoltageSimd<float_4>(c), 0.0f, 10.0f), 0.0f, 10.0f, 0.01f, 0.98f);
+      const auto sync = inputs[SYNC_INPUT].getPolyVoltageSimd<float_4>(c);
+
 			oscillator->syncEnabled = inputs[SYNC_INPUT].isConnected();
-			oscillator->process(args.sampleTime, inputs[SYNC_INPUT].getPolyVoltageSimd<float_4>(c), phaseDistX, phaseDistY);
+			oscillator->process(args.sampleTime, sync, phaseDistX, phaseDistY);
 
 			// Set output
 			if (outputs[SIN_OUTPUT].isConnected())
@@ -500,11 +458,11 @@ struct TIAREDisplay : TransparentWidget {
 	void onDragMove(const event::DragMove &e) override {
 		if (!module->inputs[TIARE::DIST_X_INPUT].isConnected()) {
 			float newDragX = APP->scene->rack->getMousePos().x;
-			module->phaseDistX = rescale(clamp(initX + (newDragX - dragX), 0.0f, 140.0f), 0.0f, 140.0f, 0.01f, 0.98f);
+			/*module->phaseDistX = rescale(clamp(initX + (newDragX - dragX), 0.0f, 140.0f), 0.0f, 140.0f, 0.01f, 0.98f);*/
 		}
 		if (!module->inputs[TIARE::DIST_Y_INPUT].isConnected()) {
 			float newDragY = APP->scene->rack->getMousePos().y;
-			module->phaseDistY = rescale(clamp(initY - (newDragY - dragY), 0.0f, 140.0f), 0.0f, 140.0f, 0.01f, 1.0f);
+			/*module->phaseDistY = rescale(clamp(initY - (newDragY - dragY), 0.0f, 140.0f), 0.0f, 140.0f, 0.01f, 1.0f);*/
 		}
 	}
 
@@ -535,8 +493,8 @@ struct TIAREDisplay : TransparentWidget {
 			{
 				nvgBeginPath(args.vg);
 				nvgMoveTo(args.vg, 0, 140);
-				nvgLineTo(args.vg, (int)(rescale(module->phaseDistX, 0, 1, 0, 140)), 140 - (int)(rescale(module->phaseDistY, 0, 1, 0.01, 140)));
-				nvgMoveTo(args.vg, (int)(rescale(module->phaseDistX, 0, 1, 0, 140)), 140 - (int)(rescale(module->phaseDistY, 0, 1, 0.01, 140)));
+				/*nvgLineTo(args.vg, (int)(rescale(module->phaseDistX, 0, 1, 0, 140)), 140 - (int)(rescale(module->phaseDistY, 0, 1, 0.01, 140)));*/
+				/*nvgMoveTo(args.vg, (int)(rescale(module->phaseDistX, 0, 1, 0, 140)), 140 - (int)(rescale(module->phaseDistY, 0, 1, 0.01, 140)));*/
 				nvgLineTo(args.vg, 140, 0);
 				nvgClosePath(args.vg);
 			}
