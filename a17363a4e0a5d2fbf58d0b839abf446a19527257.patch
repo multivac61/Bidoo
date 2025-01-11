@@ -1,0 +1,352 @@
+From a17363a4e0a5d2fbf58d0b839abf446a19527257 Mon Sep 17 00:00:00 2001
+From: falkTX <falktx@falktx.com>
+Date: Fri, 19 Aug 2022 03:46:59 +0100
+Subject: [PATCH] Patch source for Cardinal API compatibility
+
+---
+ src/CANARD.cpp   | 22 ++++++++++++++++
+ src/EDSAROS.cpp  | 11 ++++++++
+ src/EMILE.cpp    | 11 ++++++++
+ src/LIMONADE.cpp | 66 +++++++++++++++++++++++++++++++++++++++++++++---
+ src/MAGMA.cpp    | 11 ++++++++
+ src/OAI.cpp      | 11 ++++++++
+ src/OUAIVE.cpp   | 11 ++++++++
+ src/POUPRE.cpp   | 11 ++++++++
+ 8 files changed, 151 insertions(+), 3 deletions(-)
+
+diff --git a/src/CANARD.cpp b/src/CANARD.cpp
+index e908f08..3a490ed 100644
+--- a/src/CANARD.cpp
++++ b/src/CANARD.cpp
+@@ -811,7 +811,18 @@ struct CANARDWidget : BidooWidget {
+ 		CANARD *module;
+ 		void onAction(const event::Action &e) override {
+ 			std::string dir = module->lastPath.empty() ? asset::user("") : rack::system::getDirectory(module->lastPath);
++#ifdef USING_CARDINAL_NOT_RACK
++			CANARD *module = this->module;
++			async_dialog_filebrowser(false, NULL, dir.c_str(), "Load sample", [module](char* path) {
++				pathSelected(module, path);
++			});
++#else
+ 			char *path = osdialog_file(OSDIALOG_OPEN, dir.c_str(), NULL, NULL);
++			pathSelected(module, path);
++#endif
++		}
++
++		static void pathSelected(CANARD *module, char* path) {
+ 			if (path) {
+ 				module->lastPath = path;
+ 				module->loading=true;
+@@ -832,7 +843,18 @@ struct CANARDWidget : BidooWidget {
+ 		void onAction(const event::Action &e) override {
+ 			std::string dir = module->lastPath.empty() ? asset::user("") : rack::system::getDirectory(module->lastPath);
+ 			std::string fileName = module->waveFileName.empty() ? "temp.wav" : module->waveFileName;
++#ifdef USING_CARDINAL_NOT_RACK
++			CANARD *module = this->module;
++			async_dialog_filebrowser(true, fileName.c_str(), dir.c_str(), "Save sample", [module](char* path) {
++				pathSelected(module, path);
++			});
++#else
+ 			char *path = osdialog_file(OSDIALOG_SAVE, dir.c_str(), fileName.c_str(), NULL);
++			pathSelected(module, path);
++#endif
++		}
++
++		static void pathSelected(CANARD *module, char* path) {
+ 			if (path) {
+ 				module->lastPath = path;
+ 				if (!module->save) module->save = true;
+diff --git a/src/EDSAROS.cpp b/src/EDSAROS.cpp
+index 81e03c1..c94cf5d 100644
+--- a/src/EDSAROS.cpp
++++ b/src/EDSAROS.cpp
+@@ -1034,7 +1034,18 @@ struct EDSAROSWidget : BidooWidget {
+   	EDSAROS *module;
+   	void onAction(const event::Action &e) override {
+   		std::string dir = module->lastPath.empty() ? asset::user("") : rack::system::getDirectory(module->lastPath);
++#ifdef USING_CARDINAL_NOT_RACK
++		EDSAROS *module = this->module;
++		async_dialog_filebrowser(false, NULL, dir.c_str(), "Load sample", [module](char* path) {
++			pathSelected(module, path);
++		});
++#else
+   		char *path = osdialog_file(OSDIALOG_OPEN, dir.c_str(), NULL, NULL);
++  		pathSelected(module, path);
++#endif
++  	}
++
++	static void pathSelected(EDSAROS *module, char* path) {
+   		if (path) {
+   			module->lastPath = path;
+ 				module->loading=true;
+diff --git a/src/EMILE.cpp b/src/EMILE.cpp
+index e9c5225..bb76f2e 100644
+--- a/src/EMILE.cpp
++++ b/src/EMILE.cpp
+@@ -350,7 +350,18 @@ struct EMILEWidget : BidooWidget {
+   	EMILE *module;
+   	void onAction(const event::Action &e) override {
+   		std::string dir = module->lastPath.empty() ?  asset::user("") : rack::system::getDirectory(module->lastPath);
++#ifdef USING_CARDINAL_NOT_RACK
++		EMILE *module = this->module;
++		async_dialog_filebrowser(false, NULL, dir.c_str(), "Load sample", [module](char* path) {
++			pathSelected(module, path);
++		});
++#else
+   		char *path = osdialog_file(OSDIALOG_OPEN, dir.c_str(), NULL, NULL);
++  		pathSelected(module, path);
++#endif
++  	}
++
++	static void pathSelected(EMILE *module, char* path) {
+   		if (path) {
+   			module->loadSample(path);
+   			free(path);
+diff --git a/src/LIMONADE.cpp b/src/LIMONADE.cpp
+index 2cb49d9..562040a 100644
+--- a/src/LIMONADE.cpp
++++ b/src/LIMONADE.cpp
+@@ -440,8 +440,11 @@ struct LIMONADE : BidooModule {
+ 
+ 	void process(const ProcessArgs &args) override;
+ 	void loadSample();
++	void loadSamplePath(char* path);
+ 	void loadFrame();
++	void loadFramePath(char* path);
+ 	void loadPNG();
++	void loadPNGPath(char* path);
+ 	void windowWt();
+ 	void smoothWt();
+ 	void windowFrame();
+@@ -590,37 +593,67 @@ void LIMONADE::resetWaveTable() {
+ }
+ 
+ void LIMONADE::loadSample() {
++#ifdef USING_CARDINAL_NOT_RACK
++	async_dialog_filebrowser(false, NULL, NULL, "Load sample", [this](char* path) {
++		loadSamplePath(path);
++	});
++#else
+ 	osdialog_filters* filters = osdialog_filters_parse(WAV_FILTERS);
+ 	char *path = osdialog_file(OSDIALOG_OPEN, "", NULL, filters);
++	loadSamplePath(path);
++	osdialog_filters_free(filters);
++#endif
++}
++
++void LIMONADE::loadSamplePath(char* path) {
+ 	if (path) {
+ 		lastPath=path;
+ 		tLoadSample(table, path, frameSize, true);
+ 		free(path);
+ 		morphType = -1;
+ 	}
+-	osdialog_filters_free(filters);
+ }
+ 
+ void LIMONADE::loadFrame() {
++#ifdef USING_CARDINAL_NOT_RACK
++	async_dialog_filebrowser(false, NULL, NULL, "Load frame", [this](char* path) {
++		loadFramePath(path);
++	});
++#else
+ 	osdialog_filters* filters = osdialog_filters_parse(WAV_FILTERS);
+ 	char *path = osdialog_file(OSDIALOG_OPEN, "", NULL, filters);
++	loadFramePath(path);
++	osdialog_filters_free(filters);
++#endif
++}
++
++void LIMONADE::loadFramePath(char* path) {
+ 	if (path) {
+ 		lastPath=path;
+ 		tLoadFrame(table, path, params[INDEX_PARAM].getValue(), true);
+ 		free(path);
+ 	}
+-	osdialog_filters_free(filters);
+ }
+ 
+ void LIMONADE::loadPNG() {
++#ifdef USING_CARDINAL_NOT_RACK
++	async_dialog_filebrowser(false, NULL, NULL, "Load PNG", [this](char* path) {
++		loadPNGPath(path);
++	});
++#else
+ 	osdialog_filters* filters = osdialog_filters_parse(PNG_FILTERS);
+ 	char *path = osdialog_file(OSDIALOG_OPEN, "", NULL, filters);
++	loadPNGPath(path);
++	osdialog_filters_free(filters);
++#endif
++}
++
++void LIMONADE::loadPNGPath(char* path) {
+ 	if (path) {
+ 		lastPath=path;
+ 		tLoadPNG(table, path);
+ 		free(path);
+ 	}
+-	osdialog_filters_free(filters);
+ }
+ 
+ void LIMONADE::windowWt() {
+@@ -1240,6 +1273,14 @@ struct moduleSaveWavetableAsWavItem : MenuItem {
+ 	LIMONADE *module;
+ 	void onAction(const event::Action &e) override {
+ 		std::string dir = module->lastPath.empty() ? asset::user("") : rack::system::getDirectory(module->lastPath);
++#ifdef USING_CARDINAL_NOT_RACK
++		LIMONADE *module = this->module;
++		float sampleRate = APP->engine->getSampleRate();
++		async_dialog_filebrowser(true, "wavetable.wav", NULL, "Save wavetable", [module, sampleRate](char* path) {
++			tSaveWaveTableAsWave(module->table, sampleRate, path);
++			free(path);
++		});
++#else
+ 		osdialog_filters* filters = osdialog_filters_parse(WAV_FILTERS);
+ 		char *path = osdialog_file(OSDIALOG_SAVE, dir.c_str(), "Untitled", filters);
+ 		if (path) {
+@@ -1247,6 +1288,7 @@ struct moduleSaveWavetableAsWavItem : MenuItem {
+ 			free(path);
+ 		}
+ 		osdialog_filters_free(filters);
++#endif
+ 	}
+ };
+ 
+@@ -1254,6 +1296,14 @@ struct moduleSaveFrameAsWavItem : MenuItem {
+ 	LIMONADE *module;
+ 	void onAction(const event::Action &e) override {
+ 		std::string dir = module->lastPath.empty() ? asset::user("") : rack::system::getDirectory(module->lastPath);
++#ifdef USING_CARDINAL_NOT_RACK
++		LIMONADE *module = this->module;
++		float sampleRate = APP->engine->getSampleRate();
++		async_dialog_filebrowser(true, "frame.wav", NULL, "Save frame", [module, sampleRate](char* path) {
++			tSaveFrameAsWave(module->table, sampleRate, path, (size_t)(module->params[LIMONADE::INDEX_PARAM].getValue()*(module->table.nFrames - 1)));
++			free(path);
++		});
++#else
+ 		osdialog_filters* filters = osdialog_filters_parse(WAV_FILTERS);
+ 		char *path = osdialog_file(OSDIALOG_SAVE, dir.c_str(), "Untitled", filters);
+ 		if (path) {
+@@ -1261,6 +1311,7 @@ struct moduleSaveFrameAsWavItem : MenuItem {
+ 			free(path);
+ 		}
+ 		osdialog_filters_free(filters);
++#endif
+ 	}
+ };
+ 
+@@ -1268,6 +1319,14 @@ struct moduleSaveWavetableAsPngItem : MenuItem {
+ 	LIMONADE *module;
+ 	void onAction(const event::Action &e) override {
+ 		std::string dir = module->lastPath.empty() ? asset::user("") : rack::system::getDirectory(module->lastPath);
++#ifdef USING_CARDINAL_NOT_RACK
++		LIMONADE *module = this->module;
++		float sampleRate = APP->engine->getSampleRate();
++		async_dialog_filebrowser(true, "wavetable.png", dir.c_str(), "Save PNG", [module, sampleRate](char* path) {
++			tSaveWaveTableAsPng(module->table, sampleRate, path);
++			free(path);
++		});
++#else
+ 		osdialog_filters* filters = osdialog_filters_parse(PNG_FILTERS);
+ 		char *path = osdialog_file(OSDIALOG_SAVE, dir.c_str(), "Untitled", filters);
+ 		if (path) {
+@@ -1275,6 +1334,7 @@ struct moduleSaveWavetableAsPngItem : MenuItem {
+ 			free(path);
+ 		}
+ 		osdialog_filters_free(filters);
++#endif
+ 	}
+ };
+ 
+diff --git a/src/MAGMA.cpp b/src/MAGMA.cpp
+index e6b5c4e..6c27fbf 100644
+--- a/src/MAGMA.cpp
++++ b/src/MAGMA.cpp
+@@ -486,7 +486,18 @@ struct MAGMAWidget : BidooWidget {
+   	MAGMA *module;
+   	void onAction(const event::Action &e) override {
+   		std::string dir = module->lastPath.empty() ? asset::user("") : rack::system::getDirectory(module->lastPath);
++#ifdef USING_CARDINAL_NOT_RACK
++		MAGMA *module = this->module;
++		async_dialog_filebrowser(false, NULL, dir.c_str(), "Load sample", [module](char* path) {
++			pathSelected(module, path);
++		});
++#else
+   		char *path = osdialog_file(OSDIALOG_OPEN, dir.c_str(), NULL, NULL);
++  		pathSelected(module, path);
++#endif
++	}
++
++	static void pathSelected(MAGMA *module, char* path) {
+   		if (path) {
+ 				module->mylock.lock();
+ 				module->lastPath = path;
+diff --git a/src/OAI.cpp b/src/OAI.cpp
+index b7ddb90..c891703 100644
+--- a/src/OAI.cpp
++++ b/src/OAI.cpp
+@@ -441,7 +441,18 @@ struct OAIWidget : BidooWidget {
+   	OAI *module;
+   	void onAction(const event::Action &e) override {
+   		std::string dir = module->channels[module->currentChannel].lastPath.empty() ? asset::user("") : rack::system::getDirectory(module->channels[module->currentChannel].lastPath);
++#ifdef USING_CARDINAL_NOT_RACK
++		OAI *module = this->module;
++		async_dialog_filebrowser(false, NULL, dir.c_str(), "Load sample", [module](char* path) {
++			pathSelected(module, path);
++		});
++#else
+   		char *path = osdialog_file(OSDIALOG_OPEN, dir.c_str(), NULL, NULL);
++  		pathSelected(module, path);
++#endif
++  	}
++
++	static void pathSelected(OAI *module, char* path) {
+   		if (path) {
+ 				module->mylock.lock();
+ 				module->channels[module->currentChannel].lastPath = path;
+diff --git a/src/OUAIVE.cpp b/src/OUAIVE.cpp
+index 3f7a674..ba250c9 100644
+--- a/src/OUAIVE.cpp
++++ b/src/OUAIVE.cpp
+@@ -492,7 +492,18 @@ struct OUAIVEWidget : BidooWidget {
+   	void onAction(const event::Action &e) override {
+ 
+   		std::string dir = module->lastPath.empty() ? asset::user("") : rack::system::getDirectory(module->lastPath);
++#ifdef USING_CARDINAL_NOT_RACK
++		OUAIVE *module = this->module;
++		async_dialog_filebrowser(false, NULL, dir.c_str(), "Load sample", [module](char* path) {
++			pathSelected(module, path);
++		});
++#else
+   		char *path = osdialog_file(OSDIALOG_OPEN, dir.c_str(), NULL, NULL);
++  		pathSelected(module, path);
++#endif
++  	}
++
++	static void pathSelected(OUAIVE *module, char* path) {
+   		if (path) {
+   			module->samplePos = 0;
+   			module->lastPath = path;
+diff --git a/src/POUPRE.cpp b/src/POUPRE.cpp
+index 2ab460f..03dfaf3 100644
+--- a/src/POUPRE.cpp
++++ b/src/POUPRE.cpp
+@@ -315,7 +315,18 @@ struct POUPREWidget : BidooWidget {
+   	POUPRE *module;
+   	void onAction(const event::Action &e) override {
+   		std::string dir = module->lastPath.empty() ? asset::user("") : rack::system::getDirectory(module->lastPath);
++#ifdef USING_CARDINAL_NOT_RACK
++		POUPRE *module = this->module;
++		async_dialog_filebrowser(false, NULL, dir.c_str(), "Load sample", [module](char* path) {
++			pathSelected(module, path);
++		});
++#else
+   		char *path = osdialog_file(OSDIALOG_OPEN, dir.c_str(), NULL, NULL);
++  		pathSelected(module, path);
++#endif
++  	}
++
++	static void pathSelected(POUPRE *module, char* path) {
+   		if (path) {
+ 				module->mylock.lock();
+ 				module->lastPath = path;
